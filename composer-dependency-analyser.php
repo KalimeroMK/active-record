@@ -5,7 +5,7 @@ declare(strict_types=1);
 use ShipMonk\ComposerDependencyAnalyser\Config\Configuration;
 use ShipMonk\ComposerDependencyAnalyser\Config\ErrorType;
 
-return (new Configuration())
+$config = (new Configuration())
     ->disableComposerAutoloadPathScan()
     ->setFileExtensions(['php'])
     ->addPathToScan(__DIR__ . '/config', isDev: false)
@@ -18,3 +18,11 @@ return (new Configuration())
         ['yiisoft/arrays', 'yiisoft/event-dispatcher', 'yiisoft/factory'],
         [ErrorType::DEV_DEPENDENCY_IN_PROD],
     );
+
+if (PHP_VERSION_ID < 80200) {
+    // Native PHP attribute available since PHP 8.2; not autoloadable on lower PHP versions,
+    // which are still within the supported range (see "php" in composer.json).
+    $config->ignoreUnknownClasses(['AllowDynamicProperties']);
+}
+
+return $config;

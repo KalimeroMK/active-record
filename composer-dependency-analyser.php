@@ -17,6 +17,19 @@ $config = (new Configuration())
     ->ignoreErrorsOnPackages(
         ['yiisoft/arrays', 'yiisoft/event-dispatcher', 'yiisoft/factory'],
         [ErrorType::DEV_DEPENDENCY_IN_PROD],
+    )
+    // psr/event-dispatcher is the PSR interface backing the optional yiisoft/event-dispatcher
+    // integration above; it's only needed when a consumer wires that integration up.
+    ->ignoreErrorsOnPackages(
+        ['psr/event-dispatcher'],
+        [ErrorType::SHADOW_DEPENDENCY],
+    )
+    // config/bootstrap.php is only invoked by a DI container, so a PSR-11 implementation
+    // is always present at runtime even though this package doesn't require one itself.
+    ->ignoreErrorsOnPackageAndPath(
+        'psr/container',
+        __DIR__ . '/config/bootstrap.php',
+        [ErrorType::SHADOW_DEPENDENCY],
     );
 
 if (PHP_VERSION_ID < 80200) {

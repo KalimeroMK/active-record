@@ -16,6 +16,7 @@ use Yiisoft\ActiveRecord\Event\AfterUpsert;
 use Yiisoft\ActiveRecord\Event\BeforeCreateQuery;
 use Yiisoft\ActiveRecord\Event\BeforeDelete;
 use Yiisoft\ActiveRecord\Event\BeforeInsert;
+use Yiisoft\ActiveRecord\Event\BeforeLazyRelationLoad;
 use Yiisoft\ActiveRecord\Event\BeforePopulate;
 use Yiisoft\ActiveRecord\Event\BeforeSave;
 use Yiisoft\ActiveRecord\Event\BeforeUpdate;
@@ -143,5 +144,17 @@ trait EventsTrait
         parent::upsert($insertProperties, $updateProperties);
 
         $eventDispatcher->dispatch(new AfterUpsert($this));
+    }
+
+    protected function retrieveRelation(string $name): ActiveRecordInterface|array|null
+    {
+        $eventDispatcher = EventDispatcherProvider::get(static::class);
+        $eventDispatcher->dispatch($event = new BeforeLazyRelationLoad($this, $name));
+
+        if ($event->isDefaultPrevented()) {
+            return $event->getReturnValue();
+        }
+
+        return parent::retrieveRelation($name);
     }
 }

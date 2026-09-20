@@ -67,6 +67,25 @@ abstract class LazyLoadGuardTest extends TestCase
         $this->assertSame([], $events);
     }
 
+    public function testLazyLoadWithEventPrevention(): void
+    {
+        EventDispatcherProvider::set(
+            CustomerEventsModel::class,
+            new SimpleEventDispatcher(
+                static function (object $event): void {
+                    if ($event instanceof BeforeLazyRelationLoad) {
+                        $event->returnValue([]);
+                        $event->preventDefault();
+                    }
+                },
+            ),
+        );
+
+        $customer = CustomerEventsModel::query()->findByPk(1);
+
+        $this->assertSame([], $customer->getOrders());
+    }
+
     public function testLazyLoadWorksWithoutGuardRegistered(): void
     {
         $customer = CustomerEventsModel::query()->findByPk(1);

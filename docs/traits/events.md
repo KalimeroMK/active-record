@@ -32,6 +32,7 @@ Insert       | [BeforeInsert](../../src/Event/BeforeInsert.php)           | [Aft
 Update       | [BeforeUpdate](../../src/Event/BeforeUpdate.php)           | [AfterUpdate](../../src/Event/AfterUpdate.php)           
 Upsert       | [BeforeUpsert](../../src/Event/BeforeUpsert.php)           | [AfterUpsert](../../src/Event/AfterUpsert.php)           
 Delete       | [BeforeDelete](../../src/Event/BeforeDelete.php)           | [AfterDelete](../../src/Event/AfterDelete.php)           
+Lazy Relation Load | [BeforeLazyRelationLoad](../../src/Event/BeforeLazyRelationLoad.php) | 
 
 Each action is called by the corresponding method in the Active Record class, e.g. `insert()`, `update()`, `delete()`.
 
@@ -119,3 +120,41 @@ User::query()->all(); // Only records with `deleted_at` equals to NULL will be r
 ```
 
 Back to [Extending Functionality With Traits](traits.md).
+
+## Lazy Load Guard
+
+[BeforeLazyRelationLoad](../../src/Event/BeforeLazyRelationLoad.php) is dispatched every time a relation is read
+without having been eager-loaded by `with()`, which makes N+1 queries observable.
+
+[LazyLoadGuard](../../src/Event/Guard/LazyLoadGuard.php) is a ready-made listener for it. Unlike the handlers above
+it isn't an attribute, so it's wired as a regular listener:
+
+```php
+use Yiisoft\ActiveRecord\Event\BeforeLazyRelationLoad;
+use Yiisoft\ActiveRecord\Event\EventDispatcherProvider;
+use Yiisoft\ActiveRecord\Event\Guard\LazyLoadGuard;
+use Yiisoft\ActiveRecord\Event\Guard\LazyLoadGuardMode;
+
+EventDispatcherProvider::set(Customer::class, new Dispatcher(new Provider(
+    (new ListenerCollection())->add(
+        new LazyLoadGuard(LazyLoadGuardMode::Log, $logger),
+        BeforeLazyRelationLoad::class,
+    ),
+)));
+```
+
+| Mode     | Behavior                                                                                  |
+|----------|-------------------------------------------------------------------------------------------|
+| `Off`    | Default. Nothing is logged or thrown                                                       |
+| `Log`    | Reports a PSR-3 warning with the relation name, the per-request count and a stack trace    |
+| `Strict` | Throws `LogicException`                                                                    |
+
+In `Log` mode the logger is optional; when it's omitted the lazy loads are still counted and readable through
+`getCounters()`, but nothing is written anywhere.
+
+Pass `only` or `except` to limit the guard to certain model classes, for example
+`new LazyLoadGuard(LazyLoadGuardMode::Strict, except: [Category::class])`.
+
+> [!IMPORTANT]
+> `EventDispatcherProvider::set()` replaces the whole dispatcher for the given class, including the listeners
+> built from its attributes. Register the attribute handlers alongside the guard if the model relies on them.

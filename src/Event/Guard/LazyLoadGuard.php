@@ -47,11 +47,11 @@ final class LazyLoadGuard
 
         $relation = $modelClass . '::' . $event->relationName;
 
+        $this->counters[$relation] = ($this->counters[$relation] ?? 0) + 1;
+
         if ($this->mode === LazyLoadGuardMode::Strict) {
             throw new LogicException("Relation \"$relation\" is lazy loaded.");
         }
-
-        $this->counters[$relation] = ($this->counters[$relation] ?? 0) + 1;
 
         $this->logger?->warning(
             "Relation \"$relation\" is lazy loaded.",

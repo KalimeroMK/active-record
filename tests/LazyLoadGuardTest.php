@@ -11,7 +11,7 @@ use Yiisoft\ActiveRecord\Event\EventDispatcherProvider;
 use Yiisoft\ActiveRecord\Event\Guard\LazyLoadGuard;
 use Yiisoft\ActiveRecord\Event\Guard\LazyLoadGuardMode;
 use Yiisoft\ActiveRecord\Tests\Stubs\ActiveRecord\CustomerEventsModel;
-use Yiisoft\ActiveRecord\Tests\Stubs\ActiveRecord\OrderEventsModel;
+use Yiisoft\ActiveRecord\Tests\Stubs\ActiveRecord\Order;
 use Yiisoft\Test\Support\EventDispatcher\SimpleEventDispatcher;
 use Yiisoft\Test\Support\Log\SimpleLogger;
 
@@ -156,21 +156,37 @@ abstract class LazyLoadGuardTest extends TestCase
         $customer->getOrders();
     }
 
-    public function testOnlyRestrictsGuardToListedClasses(): void
+    public function testModeStrictCountsLazyLoadBeforeThrowing(): void
     {
-        $guard = new LazyLoadGuard(LazyLoadGuardMode::Strict, only: [OrderEventsModel::class]);
+        $guard = new LazyLoadGuard(LazyLoadGuardMode::Strict);
 
         $this->registerGuard(CustomerEventsModel::class, $guard);
-        $this->registerGuard(OrderEventsModel::class, $guard);
+
+        $customer = CustomerEventsModel::query()->findByPk(1);
+
+        try {
+            $customer->getOrders();
+        } catch (LogicException) {
+        }
+
+        $this->assertSame([CustomerEventsModel::class . '::orders' => 1], $guard->getCounters());
+    }
+
+    public function testOnlyRestrictsGuardToListedClasses(): void
+    {
+        $guard = new LazyLoadGuard(LazyLoadGuardMode::Strict, only: [Order::class]);
+
+        $this->registerGuard(CustomerEventsModel::class, $guard);
+        $this->registerGuard(Order::class, $guard);
 
         $customer = CustomerEventsModel::query()->findByPk(1);
 
         $this->assertCount(1, $customer->getOrders());
 
-        $order = OrderEventsModel::query()->findByPk(1);
+        $order = Order::query()->findByPk(1);
 
         $this->expectException(LogicException::class);
-        $this->expectExceptionMessage('Relation "' . OrderEventsModel::class . '::customer" is lazy loaded.');
+        $this->expectExceptionMessage('Relation "' . Order::class . '::customer" is lazy loaded.');
 
         $order->getCustomer();
     }
@@ -180,16 +196,16 @@ abstract class LazyLoadGuardTest extends TestCase
         $guard = new LazyLoadGuard(LazyLoadGuardMode::Strict, except: [CustomerEventsModel::class]);
 
         $this->registerGuard(CustomerEventsModel::class, $guard);
-        $this->registerGuard(OrderEventsModel::class, $guard);
+        $this->registerGuard(Order::class, $guard);
 
         $customer = CustomerEventsModel::query()->findByPk(1);
 
         $this->assertCount(1, $customer->getOrders());
 
-        $order = OrderEventsModel::query()->findByPk(1);
+        $order = Order::query()->findByPk(1);
 
         $this->expectException(LogicException::class);
-        $this->expectExceptionMessage('Relation "' . OrderEventsModel::class . '::customer" is lazy loaded.');
+        $this->expectExceptionMessage('Relation "' . Order::class . '::customer" is lazy loaded.');
 
         $order->getCustomer();
     }

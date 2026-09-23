@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Yiisoft\ActiveRecord\Event\Guard;
+namespace Yiisoft\ActiveRecord;
 
 /**
- * Modes of the {@see LazyLoadGuard} listener.
+ * Modes of the {@see LazyLoadGuard}.
  */
 enum LazyLoadGuardMode
 {

@@ -5,12 +5,11 @@ declare(strict_types=1);
 namespace Yiisoft\ActiveRecord\Tests;
 
 use LogicException;
-use Psr\EventDispatcher\EventDispatcherInterface;
-use Yiisoft\ActiveRecord\Event\BeforeLazyRelationLoad;
+use Yiisoft\ActiveRecord\Event\AfterPopulate;
 use Yiisoft\ActiveRecord\Event\EventDispatcherProvider;
-use Yiisoft\ActiveRecord\Event\Guard\LazyLoadGuard;
-use Yiisoft\ActiveRecord\Event\Guard\LazyLoadGuardMode;
-use Yiisoft\ActiveRecord\Tests\Stubs\ActiveRecord\CustomerEventsModel;
+use Yiisoft\ActiveRecord\LazyLoadGuard;
+use Yiisoft\ActiveRecord\LazyLoadGuardMode;
+use Yiisoft\ActiveRecord\Tests\Stubs\ActiveRecord\CustomerLazyLoadGuardModel;
 use Yiisoft\Test\Support\EventDispatcher\SimpleEventDispatcher;
 use Yiisoft\Test\Support\Log\SimpleLogger;
 
@@ -18,76 +17,46 @@ abstract class LazyLoadGuardTest extends TestCase
 {
     public function setUp(): void
     {
+        LazyLoadGuard::reset();
         EventDispatcherProvider::reset();
     }
 
-    public function testLazyLoadDispatchesEvent(): void
+    public function tearDown(): void
     {
-        $events = [];
-
-        EventDispatcherProvider::set(
-            CustomerEventsModel::class,
-            new SimpleEventDispatcher(
-                static function (object $event) use (&$events): void {
-                    if ($event instanceof BeforeLazyRelationLoad) {
-                        $events[] = $event->relationName;
-                    }
-                },
-            ),
-        );
-
-        $customer = CustomerEventsModel::query()->findByPk(1);
-        $customer->getOrders();
-
-        $this->assertSame(['orders'], $events);
+        LazyLoadGuard::reset();
+        EventDispatcherProvider::reset();
     }
 
-    public function testEagerLoadedRelationDoesNotDispatchEvent(): void
+    public function testLazyLoadIsCounted(): void
     {
-        $events = [];
-
-        EventDispatcherProvider::set(
-            CustomerEventsModel::class,
-            new SimpleEventDispatcher(
-                static function (object $event) use (&$events): void {
-                    if ($event instanceof BeforeLazyRelationLoad) {
-                        $events[] = $event->relationName;
-                    }
-                },
-            ),
-        );
-
-        $customers = CustomerEventsModel::query()->with('orders')->all();
-
-        foreach ($customers as $customer) {
+        foreach (CustomerLazyLoadGuardModel::query()->all() as $customer) {
             $customer->getOrders();
         }
 
-        $this->assertSame([], $events);
+        $this->assertSame([CustomerLazyLoadGuardModel::class . '::orders' => 3], LazyLoadGuard::getCounters());
     }
 
-    public function testLazyLoadWithEventPrevention(): void
+    public function testEagerLoadedRelationIsNotCounted(): void
     {
-        EventDispatcherProvider::set(
-            CustomerEventsModel::class,
-            new SimpleEventDispatcher(
-                static function (object $event): void {
-                    if ($event instanceof BeforeLazyRelationLoad) {
-                        $event->returnValue([]);
-                        $event->preventDefault();
-                    }
-                },
-            ),
-        );
+        foreach (CustomerLazyLoadGuardModel::query()->with('orders')->all() as $customer) {
+            $customer->getOrders();
+        }
 
-        $customer = CustomerEventsModel::query()->findByPk(1);
-
-        $this->assertSame([], $customer->getOrders());
+        $this->assertSame([], LazyLoadGuard::getCounters());
     }
 
-    public function testLazyLoadWorksWithoutGuardRegistered(): void
+    public function testLoadedRelationIsCountedOnce(): void
     {
-        $customer = CustomerEventsModel::query()->findByPk(1);
+        $customer = CustomerLazyLoadGuardModel::query()->findByPk(1);
+        $customer->getOrders();
+        $customer->getOrders();
+
+        $this->assertSame([CustomerLazyLoadGuardModel::class . '::orders' => 1], LazyLoadGuard::getCounters());
+    }
+
+    public function testModeLogWithoutLoggerReturnsRelation(): void
+    {
+        $customer = CustomerLazyLoadGuardModel::query()->findByPk(1);
 
         $this->assertCount(1, $customer->getOrders());
     }
@@ -95,11 +64,9 @@ abstract class LazyLoadGuardTest extends TestCase
     public function testModeLogWritesWarningWithContext(): void
     {
         $logger = new SimpleLogger();
-        $guard = new LazyLoadGuard(LazyLoadGuardMode::Log, $logger);
+        LazyLoadGuard::set(LazyLoadGuardMode::Log, $logger);
 
-        $this->registerGuard(CustomerEventsModel::class, $guard);
-
-        $customer = CustomerEventsModel::query()->findByPk(1);
+        $customer = CustomerLazyLoadGuardModel::query()->findByPk(1);
         $customer->getOrders();
 
         $messages = $logger->getMessages();
@@ -110,69 +77,70 @@ abstract class LazyLoadGuardTest extends TestCase
 
         $context = $messages[0]['context'];
 
-        $this->assertSame(CustomerEventsModel::class, $context['model']);
+        $this->assertSame(CustomerLazyLoadGuardModel::class, $context['model']);
         $this->assertSame('orders', $context['relation']);
         $this->assertSame(1, $context['count']);
         $this->assertIsString($context['trace']);
     }
 
-    public function testModeLogCountsEachLazyLoad(): void
-    {
-        $guard = new LazyLoadGuard(LazyLoadGuardMode::Log, new SimpleLogger());
-
-        $this->registerGuard(CustomerEventsModel::class, $guard);
-
-        foreach (CustomerEventsModel::query()->all() as $customer) {
-            $customer->getOrders();
-        }
-
-        $this->assertSame([CustomerEventsModel::class . '::orders' => 3], $guard->getCounters());
-    }
-
     public function testModeStrictThrowsExceptionWithRelationName(): void
     {
-        $this->registerGuard(CustomerEventsModel::class, new LazyLoadGuard(LazyLoadGuardMode::Strict));
+        LazyLoadGuard::set(LazyLoadGuardMode::Strict);
 
-        $customer = CustomerEventsModel::query()->findByPk(1);
+        $customer = CustomerLazyLoadGuardModel::query()->findByPk(1);
 
         $this->expectException(LogicException::class);
-        $this->expectExceptionMessage('Relation "' . CustomerEventsModel::class . '::orders" is lazy loaded.');
+        $this->expectExceptionMessage('Relation "' . CustomerLazyLoadGuardModel::class . '::orders" is lazy loaded.');
 
         $customer->getOrders();
     }
 
     public function testModeStrictCountsLazyLoadBeforeThrowing(): void
     {
-        $guard = new LazyLoadGuard(LazyLoadGuardMode::Strict);
+        LazyLoadGuard::set(LazyLoadGuardMode::Strict);
 
-        $this->registerGuard(CustomerEventsModel::class, $guard);
-
-        $customer = CustomerEventsModel::query()->findByPk(1);
+        $customer = CustomerLazyLoadGuardModel::query()->findByPk(1);
 
         try {
             $customer->getOrders();
         } catch (LogicException) {
         }
 
-        $this->assertSame([CustomerEventsModel::class . '::orders' => 1], $guard->getCounters());
+        $this->assertSame([CustomerLazyLoadGuardModel::class . '::orders' => 1], LazyLoadGuard::getCounters());
     }
 
-    /**
-     * @psalm-param class-string $modelClass
-     */
-    private function registerGuard(string $modelClass, LazyLoadGuard $guard): void
+    public function testWorksWithEventsTrait(): void
     {
-        EventDispatcherProvider::set($modelClass, $this->createDispatcher($guard));
-    }
+        $events = [];
 
-    private function createDispatcher(LazyLoadGuard $guard): EventDispatcherInterface
-    {
-        return new SimpleEventDispatcher(
-            static function (object $event) use ($guard): void {
-                if ($event instanceof BeforeLazyRelationLoad) {
-                    $guard($event);
-                }
-            },
+        EventDispatcherProvider::set(
+            CustomerLazyLoadGuardModel::class,
+            new SimpleEventDispatcher(
+                static function (object $event) use (&$events): void {
+                    $events[] = $event::class;
+                },
+            ),
         );
+
+        $customer = CustomerLazyLoadGuardModel::query()->findByPk(1);
+        $customer->getOrders();
+
+        $this->assertContains(AfterPopulate::class, $events);
+        $this->assertSame([CustomerLazyLoadGuardModel::class . '::orders' => 1], LazyLoadGuard::getCounters());
+    }
+
+    public function testReset(): void
+    {
+        LazyLoadGuard::set(LazyLoadGuardMode::Strict, new SimpleLogger());
+        LazyLoadGuard::reset();
+
+        $customer = CustomerLazyLoadGuardModel::query()->findByPk(1);
+        $customer->getOrders();
+
+        $this->assertSame([CustomerLazyLoadGuardModel::class . '::orders' => 1], LazyLoadGuard::getCounters());
+
+        LazyLoadGuard::reset();
+
+        $this->assertSame([], LazyLoadGuard::getCounters());
     }
 }

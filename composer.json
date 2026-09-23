@@ -62,7 +62,7 @@
         "yiisoft/db-oracle": "For Oracle database support",
         "yiisoft/factory": "For factory support",
         "yiisoft/event-dispatcher": "For events support",
-        "psr/log": "For \\Yiisoft\\ActiveRecord\\Event\\Guard\\LazyLoadGuard logging support"
+        "psr/log": "For \\Yiisoft\\ActiveRecord\\LazyLoadGuard logging support"
     },
     "autoload": {
         "psr-4": {

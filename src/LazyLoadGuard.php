@@ -32,7 +32,8 @@ final class LazyLoadGuard
     }
 
     /**
-     * Registers a lazy load of the relation and reports it according to the mode.
+     * Registers a lazy load of the relation and reports it according to the mode, starting from the second lazy load
+     * of the same relation, since loading a relation once isn't an N+1 problem.
      *
      * @throws LogicException In the {@see LazyLoadGuardMode::Strict} mode.
      */
@@ -42,6 +43,10 @@ final class LazyLoadGuard
         $relation = $modelClass . '::' . $relationName;
 
         self::$counters[$relation] = (self::$counters[$relation] ?? 0) + 1;
+
+        if (self::$counters[$relation] === 1) {
+            return;
+        }
 
         if (self::$mode === LazyLoadGuardMode::Strict) {
             throw new LogicException("Relation \"$relation\" is lazy loaded.");

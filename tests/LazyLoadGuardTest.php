@@ -61,7 +61,7 @@ abstract class LazyLoadGuardTest extends TestCase
         $this->assertCount(1, $customer->getOrders());
     }
 
-    public function testModeLogWritesWarningWithContext(): void
+    public function testModeLogIgnoresSingleLazyLoad(): void
     {
         $logger = new SimpleLogger();
         LazyLoadGuard::set(LazyLoadGuardMode::Log, $logger);
@@ -69,9 +69,21 @@ abstract class LazyLoadGuardTest extends TestCase
         $customer = CustomerLazyLoadGuardModel::query()->findByPk(1);
         $customer->getOrders();
 
+        $this->assertSame([], $logger->getMessages());
+    }
+
+    public function testModeLogWritesWarningWithContext(): void
+    {
+        $logger = new SimpleLogger();
+        LazyLoadGuard::set(LazyLoadGuardMode::Log, $logger);
+
+        foreach (CustomerLazyLoadGuardModel::query()->all() as $customer) {
+            $customer->getOrders();
+        }
+
         $messages = $logger->getMessages();
 
-        $this->assertCount(1, $messages);
+        $this->assertCount(2, $messages);
         $this->assertSame('warning', $messages[0]['level']);
         $this->assertStringContainsString('orders', $messages[0]['message']);
 
@@ -79,34 +91,45 @@ abstract class LazyLoadGuardTest extends TestCase
 
         $this->assertSame(CustomerLazyLoadGuardModel::class, $context['model']);
         $this->assertSame('orders', $context['relation']);
-        $this->assertSame(1, $context['count']);
+        $this->assertSame(2, $context['count']);
         $this->assertIsString($context['trace']);
+    }
+
+    public function testModeStrictIgnoresSingleLazyLoad(): void
+    {
+        LazyLoadGuard::set(LazyLoadGuardMode::Strict);
+
+        $customer = CustomerLazyLoadGuardModel::query()->findByPk(1);
+
+        $this->assertCount(1, $customer->getOrders());
     }
 
     public function testModeStrictThrowsExceptionWithRelationName(): void
     {
         LazyLoadGuard::set(LazyLoadGuardMode::Strict);
 
-        $customer = CustomerLazyLoadGuardModel::query()->findByPk(1);
+        $customers = CustomerLazyLoadGuardModel::query()->all();
+        $customers[0]->getOrders();
 
         $this->expectException(LogicException::class);
         $this->expectExceptionMessage('Relation "' . CustomerLazyLoadGuardModel::class . '::orders" is lazy loaded.');
 
-        $customer->getOrders();
+        $customers[1]->getOrders();
     }
 
     public function testModeStrictCountsLazyLoadBeforeThrowing(): void
     {
         LazyLoadGuard::set(LazyLoadGuardMode::Strict);
 
-        $customer = CustomerLazyLoadGuardModel::query()->findByPk(1);
+        $customers = CustomerLazyLoadGuardModel::query()->all();
+        $customers[0]->getOrders();
 
         try {
-            $customer->getOrders();
+            $customers[1]->getOrders();
         } catch (LogicException) {
         }
 
-        $this->assertSame([CustomerLazyLoadGuardModel::class . '::orders' => 1], LazyLoadGuard::getCounters());
+        $this->assertSame([CustomerLazyLoadGuardModel::class . '::orders' => 2], LazyLoadGuard::getCounters());
     }
 
     public function testWorksWithEventsTrait(): void

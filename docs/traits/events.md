@@ -143,17 +143,16 @@ EventDispatcherProvider::set(Customer::class, new Dispatcher(new Provider(
 )));
 ```
 
-| Mode     | Behavior                                                                                  |
-|----------|-------------------------------------------------------------------------------------------|
-| `Off`    | Default. Nothing is logged or thrown                                                       |
-| `Log`    | Reports a PSR-3 warning with the relation name, the per-request count and a stack trace    |
-| `Strict` | Throws `LogicException`                                                                    |
+| Mode     | Behavior                                                                                          |
+|----------|---------------------------------------------------------------------------------------------------|
+| `Log`    | Default. Reports a PSR-3 warning with the relation name, the per-request count and a stack trace |
+| `Strict` | Throws `LogicException`                                                                           |
 
 In `Log` mode the logger is optional; when it's omitted the lazy loads are still counted and readable through
 `getCounters()`, but nothing is written anywhere.
 
-Pass `only` or `except` to limit the guard to certain model classes, for example
-`new LazyLoadGuard(LazyLoadGuardMode::Strict, except: [Category::class])`.
+The guard is meant for development and testing, e.g. `Strict` in the test suite and `Log` on staging.
+To disable it, don't register it.
 
 > [!IMPORTANT]
 > `EventDispatcherProvider::set()` replaces the whole dispatcher for the given class, including the listeners

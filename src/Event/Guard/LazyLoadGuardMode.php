@@ -9,8 +9,6 @@ namespace Yiisoft\ActiveRecord\Event\Guard;
  */
 enum LazyLoadGuardMode
 {
-    /** Lazy loading isn't tracked. */
-    case Off;
     /** Every lazy load is reported as a PSR-3 warning. */
     case Log;
     /** Every lazy load throws a `LogicException`. */
